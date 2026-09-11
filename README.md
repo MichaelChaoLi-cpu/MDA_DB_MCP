@@ -1,35 +1,95 @@
 # MDA 数据库问答
 
-给 `mda` 数据库（柬埔寨 CSES、DHS、蒙古 HSES/LFS 等调查微观数据）做的
-MCP Server + 网页问答界面。用中文提问，LLM 自动搜索元数据、写 SQL、返回结果。
+用中文或英文提问，LLM 自动搜索元数据、写 SQL、返回结果并画图。
+覆盖 5 个调查项目、1149 张表的社会经济调查微观数据。
 
-## 快速开始
+由两部分组成：
+
+- **MCP Server** —— 把「查这个数据库」包装成 14 个标准工具。
+  既给自家网页用，也能直接挂到 Claude Desktop / Claude Code。
+- **问答网页** —— 中英双语界面，API Key 在网页上配置，聊天历史本地留存。
+
+## 启动
 
 ```bash
-# 1. 装依赖（只需一次）
-uv sync
-
-# 2. 启动
-uv run uvicorn backend.main:app --reload --port 8000
-
-# 3. 浏览器打开 http://localhost:8000
-#    首次使用点「设置」，填入 DeepSeek 或 Gemini 的 API Key
+./start.sh
 ```
 
-变量搜索依赖一个本地索引（已建好，10.6 万条）。**数据库新增调查或变量后，
-到设置页点「重建索引」**（约 9 秒），否则搜不到新内容。
+打开 http://localhost:8000 就能用。
 
-申请 Key：
-- DeepSeek：https://platform.deepseek.com/api_keys （便宜，中文好）
-- Gemini：https://aistudio.google.com/apikey （有免费额度）
+指定端口：
 
-模型名在网页上是**自由输入**的，下拉列表只是建议。两家的模型 ID 换得很快
+```bash
+./start.sh 8080          # 位置参数
+PORT=8080 ./start.sh     # 或环境变量
+```
+
+其他参数：
+
+| 命令 | 作用 |
+|---|---|
+| `./start.sh --dev` | 改代码自动重载（开发用） |
+| `./start.sh --lan` | 允许局域网内其他设备访问 |
+| `./start.sh --help` | 看全部用法 |
+
+`start.sh` 启动前会跑一遍预检 —— 依赖、端口、数据库、元数据索引、API Key。
+这几项是实际最容易卡住的地方，有问题时直接告诉你怎么修，
+而不是等服务起来之后丢一段 traceback：
+
+```
+MDA 数据库问答 —— 启动预检
+  依赖就绪
+  端口 8000 可用
+  数据库已连接（mda_viewer 可见 1149 张表）
+  元数据索引：106,291 条，0.1 天前建立
+  API Key 已配置（deepseek / deepseek-flash，来自本地配置）
+
+  → http://127.0.0.1:8000
+  Ctrl+C 停止
+```
+
+首次运行会自动 `uv sync` 装依赖、自动建立元数据索引（约 10 秒）。
+
+### 不用脚本直接起
+
+```bash
+uv run uvicorn backend.main:app --port 8000
+```
+
+只是少了预检。想单独跑预检：`uv run python -m backend.preflight`。
+
+## 首次使用
+
+启动后点「设置」，填入 DeepSeek 或 Gemini 的 API Key：
+
+- **DeepSeek**：https://platform.deepseek.com/api_keys （便宜，中文好）
+- **Gemini**：https://aistudio.google.com/apikey （有免费额度）
+
+填完点「测试连接」再保存 —— 这样配错了能立刻看到原因，
+而不是存下来之后提问时才报错。
+
+模型名是**自由输入**的，下拉列表只是建议。两家的模型 ID 换得很快
 （DeepSeek 已从 `deepseek-chat` 换成 `deepseek-flash`，Gemini 从 2.5 一路到 3.8），
-所以别把它写死在代码里，去控制台看当前可用的名字直接填。
+所以别写死在代码里，去控制台看当前可用的名字直接填。
+
+Key 加密后存在 `~/.mda_db_mcp/`（项目目录之外，不会被 git 提交）。
+
+## 能问什么
+
+| 你问 | 它做什么 |
+|---|---|
+| 现在哪些调查入库了？ | `list_surveys` —— 5 个调查的规模、覆盖国家、年份 |
+| MICS 包括哪些 sections？ | `list_sections` —— 模块划分、每行代表什么、连接键 |
+| 有没有和教育年限相关的变量？ | `find_variables` —— 语义搜索 10.6 万条变量元数据 |
+| `years_attended_school` 有多少个回答？ | `variable_stats` —— 回答数、取值分布、加权统计 |
+| 画一下做饭燃料的分布 | `plot_variable` —— 图直接显示在聊天里 |
+
+每一步的工具调用和 SQL 都实时显示，可以展开核对它写得对不对。
 
 ## 结构
 
 ```
+start.sh             一条命令启动（含预检）
 mcp_server/          MCP Server —— 把「查数据库」包装成 14 个标准工具
   db.py              连接池 + 通用 SQL（元数据查询、安全检查）
   catalog.py         调查目录层：四个调查族三种元数据形态，用适配器统一
@@ -41,10 +101,11 @@ backend/             网页后端
   config_store.py    API Key 加密存储、供应商与推理参数定义
   history.py         聊天历史（SQLite）
   mcp_bridge.py      后端作为 MCP 客户端，翻译工具格式给 LLM
+  preflight.py       启动预检（数据库 / 索引 / Key）
   agent.py           agent 循环：LLM ↔ 工具的来回对话
 web/index.html       前端（单文件，无需构建，中英双语）
 test_mcp.py          手动测试 MCP Server
-grants.sql           开通蒙古 HSES/LFS 只读权限（需你自己执行）
+grants.sql           开通蒙古 HSES/LFS 只读权限（已执行；换机器时需重跑）
 revoke_grants.sql    撤销上述授权
 ```
 
@@ -131,7 +192,7 @@ revoke_grants.sql    撤销上述授权
 其余 6 个是 `candidate_only`（尚未验证）。工具把状态拼进变量说明里，
 避免 LLM 把候选变量当成已验证的推荐出去。
 
-## 「语义搜索」是怎么做的## 「语义搜索」是怎么做的
+## 「语义搜索」是怎么做的
 
 `find_variables` 不是向量检索。语义能力来自两层配合：
 
@@ -386,6 +447,9 @@ echo "cwd:     $(pwd)"
 | `MDA_CONFIG_DIR` | 配置和历史库目录，默认 `~/.mda_db_mcp` |
 
 ## 排查问题
+
+**端口被占用**
+`start.sh` 会告诉你是哪个进程占的，换个端口 `./start.sh 8001` 或 `kill <PID>`。
 
 **网页显示「数据库未连接」**
 ```bash
