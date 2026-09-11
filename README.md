@@ -12,7 +12,7 @@
 ## 启动
 
 ```bash
-./start.sh
+./mda_db_mcp_start.sh
 ```
 
 打开 http://localhost:8000 就能用。
@@ -20,19 +20,19 @@
 指定端口：
 
 ```bash
-./start.sh 8080          # 位置参数
-PORT=8080 ./start.sh     # 或环境变量
+./mda_db_mcp_start.sh 8080          # 位置参数
+PORT=8080 ./mda_db_mcp_start.sh     # 或环境变量
 ```
 
 其他参数：
 
 | 命令 | 作用 |
 |---|---|
-| `./start.sh --dev` | 改代码自动重载（开发用） |
-| `./start.sh --lan` | 允许局域网内其他设备访问 |
-| `./start.sh --help` | 看全部用法 |
+| `./mda_db_mcp_start.sh --dev` | 改代码自动重载（开发用） |
+| `./mda_db_mcp_start.sh --lan` | 允许局域网内其他设备访问 |
+| `./mda_db_mcp_start.sh --help` | 看全部用法 |
 
-`start.sh` 启动前会跑一遍预检 —— 依赖、端口、数据库、元数据索引、API Key。
+`mda_db_mcp_start.sh` 启动前会跑一遍预检 —— 依赖、端口、数据库、元数据索引、API Key。
 这几项是实际最容易卡住的地方，有问题时直接告诉你怎么修，
 而不是等服务起来之后丢一段 traceback：
 
@@ -89,7 +89,7 @@ Key 加密后存在 `~/.mda_db_mcp/`（项目目录之外，不会被 git 提交
 ## 结构
 
 ```
-start.sh             一条命令启动（含预检）
+mda_db_mcp_start.sh  一条命令启动（含预检）
 mcp_server/          MCP Server —— 把「查数据库」包装成 14 个标准工具
   db.py              连接池 + 通用 SQL（元数据查询、安全检查）
   catalog.py         调查目录层：四个调查族三种元数据形态，用适配器统一
@@ -449,7 +449,7 @@ echo "cwd:     $(pwd)"
 ## 排查问题
 
 **端口被占用**
-`start.sh` 会告诉你是哪个进程占的，换个端口 `./start.sh 8001` 或 `kill <PID>`。
+`mda_db_mcp_start.sh` 会告诉你是哪个进程占的，换个端口 `./mda_db_mcp_start.sh 8001` 或 `kill <PID>`。
 
 **网页显示「数据库未连接」**
 ```bash

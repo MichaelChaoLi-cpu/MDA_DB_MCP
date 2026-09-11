@@ -1,6 +1,6 @@
 """启动预检：把最容易卡住的几件事先查一遍。
 
-单独成一个模块而不是塞进 start.sh，因为它需要 import 项目代码
+单独成一个模块而不是塞进启动脚本，因为它需要 import 项目代码
 （判断连接串、索引路径、Key 存放位置），写在 shell 里要么重复一遍这些逻辑、
 要么靠内嵌 Python 堆 heredoc，两者都不好维护。
 
@@ -19,6 +19,10 @@ import os
 import sys
 
 from . import config_store
+
+# 启动脚本会把自己的文件名传进来。提示文字里不写死脚本名，
+# 否则脚本改名之后这里会指向一个不存在的命令。
+LAUNCHER = os.environ.get("MDA_LAUNCHER", "./mda_db_mcp_start.sh")
 
 DB_TABLES_SQL = """
 SELECT count(*) FROM pg_class c
@@ -54,7 +58,7 @@ async def check_database(dsn: str) -> None:
             f"  连接串：{dsn}\n"
             f"  排查：  psql -d mda -c 'select 1'\n"
             f"  密码走 ~/.pgpass，不需要写在连接串里。\n"
-            f"  换连接串：MDA_DATABASE_URL=... ./start.sh"
+            f"  换连接串：MDA_DATABASE_URL=... {LAUNCHER}"
         )
     try:
         who = await conn.fetchval("SELECT current_user")
@@ -86,7 +90,7 @@ async def check_index(build: bool) -> None:
 
     if not build:
         warn("元数据索引不存在，变量搜索会不可用。"
-             "启动后到设置页点「重建索引」，或用 ./start.sh 自动建立。")
+             f"启动后到设置页点「重建索引」，或用 {LAUNCHER} 自动建立。")
         return
 
     ok("元数据索引不存在，正在建立（约 10 秒，变量搜索依赖它）…")
