@@ -19,7 +19,7 @@ usage() {
 MDA 调查数据库问答 —— 启动网页服务
 
 用法：
-  $SELF                默认 8000 端口
+  $SELF                默认 3344 端口
   $SELF 8080           指定端口
   PORT=8080 $SELF      用环境变量指定端口
   $SELF --dev          改代码自动重载（开发用）
@@ -28,14 +28,14 @@ MDA 调查数据库问答 —— 启动网页服务
   $SELF --help         显示本说明
 
 环境变量：
-  PORT                 端口，默认 8000
+  PORT                 端口，默认 3344
   HOST                 监听地址，默认 127.0.0.1
   MDA_DATABASE_URL     数据库连接串
   MDA_CONFIG_DIR       配置和索引目录，默认 ~/.mda_db_mcp
 USAGE
 }
 
-PORT="${PORT:-8000}"
+PORT="${PORT:-3344}"
 HOST="${HOST:-127.0.0.1}"
 RELOAD=""
 
@@ -98,6 +98,57 @@ fi
 echo
 echo "  → http://${SHOW_HOST}:${PORT}"
 [ "$HOST" = "0.0.0.0" ] && echo "  （已开放局域网访问；注意网页里能查到全部数据）"
-echo "  Ctrl+C 停止"
+echo "  Ctrl+C 停止（关闭终端窗口同样会停止并释放端口）"
 echo
-exec uv run uvicorn backend.main:app --host "$HOST" --port "$PORT" $RELOAD
+
+# 不用 exec 而是后台跑 + trap，为的是能保证「退出时端口一定被释放」：
+#   Ctrl+C     终端把 SIGINT 发给整个前台进程组，子进程自己会优雅关闭
+#   关闭终端   终端发 SIGHUP，同样到达子进程
+#   kill 本脚本 只有脚本收到信号，需要由 trap 转发给子进程
+# 三种情况下 trap 都会确认子进程真的退了，卡住超过 10 秒就强杀，
+# 不会留下一个占着端口的僵尸进程。
+#
+# 直接用 .venv/bin/python 而不是 uv run：少一层 uv 包装进程，
+# 信号直达 uvicorn，不依赖 uv 是否转发信号。
+SERVER_PID=""
+CLEANED=0
+
+cleanup() {
+  [ "$CLEANED" = "1" ] && return
+  CLEANED=1
+  [ -z "$SERVER_PID" ] && return
+  kill -0 "$SERVER_PID" 2>/dev/null || return   # 已经退了
+
+  printf '\n  正在关闭…\n'
+  # 先等它自己关。Ctrl+C / SIGHUP 时子进程已经收到信号了，
+  # 这时再补一个信号会被 uvicorn 当成「第二次信号」而直接强退，
+  # 反而跳过 lifespan 关闭（关 MCP 子进程、关连接池）。
+  for _ in 1 2 3 4 5 6; do
+    kill -0 "$SERVER_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  # 三秒后还在，说明它没收到信号（例如只 kill 了本脚本），转发一个 SIGTERM
+  if kill -0 "$SERVER_PID" 2>/dev/null; then
+    kill -TERM "$SERVER_PID" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+      kill -0 "$SERVER_PID" 2>/dev/null || break
+      sleep 0.5
+    done
+  fi
+  # 还赖着就强杀，端口必须让出来
+  if kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "  关闭超时，强制结束 PID ${SERVER_PID}"
+    kill -KILL "$SERVER_PID" 2>/dev/null || true
+  fi
+  echo "  已停止，端口 ${PORT} 已释放"
+}
+
+trap cleanup INT TERM HUP EXIT
+
+.venv/bin/python -m uvicorn backend.main:app \
+  --host "$HOST" --port "$PORT" $RELOAD &
+SERVER_PID=$!
+
+# wait 被信号打断会返回非 0，这里不让 set -e 直接退出，
+# 好让 trap 有机会跑完清理
+wait "$SERVER_PID" || true

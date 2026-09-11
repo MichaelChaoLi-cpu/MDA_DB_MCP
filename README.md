@@ -15,9 +15,11 @@
 ./mda_db_mcp_start.sh
 ```
 
-打开 http://localhost:8000 就能用。
+打开 http://localhost:3344 就能用。
 
 指定端口：
+
+默认端口 3344。想换：
 
 ```bash
 ./mda_db_mcp_start.sh 8080          # 位置参数
@@ -39,21 +41,53 @@ PORT=8080 ./mda_db_mcp_start.sh     # 或环境变量
 ```
 MDA 数据库问答 —— 启动预检
   依赖就绪
-  端口 8000 可用
+  端口 3344 可用
   数据库已连接（mda_viewer 可见 1149 张表）
   元数据索引：106,291 条，0.1 天前建立
   API Key 已配置（deepseek / deepseek-flash，来自本地配置）
 
-  → http://127.0.0.1:8000
+  → http://127.0.0.1:3344
   Ctrl+C 停止
 ```
 
 首次运行会自动 `uv sync` 装依赖、自动建立元数据索引（约 10 秒）。
 
+### 怎么停
+
+脚本会占住终端。**Ctrl+C 或直接关掉终端窗口都会停止服务并释放端口。**
+
+脚本不是用 `exec` 交棒，而是后台跑 uvicorn 再配一个信号 trap，
+为的是保证「退出时端口一定被释放」：
+
+| 退出方式 | 端口释放 | 优雅关闭 |
+|---|---|---|
+| Ctrl+C | ✓ | ✓ |
+| 关闭终端窗口 | ✓ | 直接终止（见下） |
+| `kill <脚本 PID>` | ✓ | ✓（trap 转发 SIGTERM） |
+| `kill -9` | ✓ | ✗（强杀无法优雅） |
+
+trap 会等子进程自己关（最多 3 秒），没动静才转发 SIGTERM，
+再等 7 秒仍不退就强杀 —— 所以不会出现「Ctrl+C 之后终端卡住」
+或者「端口被僵尸进程占着」。
+
+关于「优雅关闭」：指 uvicorn 执行 lifespan 关闭流程，
+主动结束 MCP 子进程、关掉连接池。关闭终端时（SIGHUP）uvicorn 不处理这个信号
+会直接终止，但实测**不会留下任何东西** —— MCP 子进程的 stdin 管道断开后
+会自行退出，数据库连接由操作系统关闭 socket 时释放。
+我按 Ctrl+C、关终端、kill 脚本、kill -9、以及 `--dev` 重载模式
+五种情况逐一验证过：端口连接数和 `mda_viewer` 的数据库连接数都归零。
+
+想确认有没有残留：
+
+```bash
+lsof -nP -iTCP:3344                                   # 应该没有输出
+psql -d mda -c "select count(*) from pg_stat_activity where usename='mda_viewer'"
+```
+
 ### 不用脚本直接起
 
 ```bash
-uv run uvicorn backend.main:app --port 8000
+uv run uvicorn backend.main:app --port 3344
 ```
 
 只是少了预检。想单独跑预检：`uv run python -m backend.preflight`。
@@ -449,7 +483,7 @@ echo "cwd:     $(pwd)"
 ## 排查问题
 
 **端口被占用**
-`mda_db_mcp_start.sh` 会告诉你是哪个进程占的，换个端口 `./mda_db_mcp_start.sh 8001` 或 `kill <PID>`。
+`mda_db_mcp_start.sh` 会告诉你是哪个进程占的，换个端口 `./mda_db_mcp_start.sh 3345` 或 `kill <PID>`。
 
 **网页显示「数据库未连接」**
 ```bash
