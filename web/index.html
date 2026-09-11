@@ -1,0 +1,1406 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MDA 数据库问答</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --border: #e2e5ea; --text: #1b1f24;
+    --muted: #666f7a; --accent: #2b6cb0; --accent-soft: #eaf2fb;
+    --ok: #1a7f4b; --err: #c0392b; --code-bg: #f2f4f7; --think-bg: #f0eef7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2126; --border: #31353c; --text: #e6e8eb;
+      --muted: #9aa3ad; --accent: #62a0e0; --accent-soft: #22303d;
+      --ok: #4fbd80; --err: #e77a6d; --code-bg: #14161a; --think-bg: #232232;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20; flex-wrap: wrap;
+  }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; white-space: nowrap; }
+  .tabs { display: flex; gap: 4px; }
+  .tab, .langbtn, .iconbtn {
+    padding: 6px 13px; border-radius: 6px; cursor: pointer; border: none;
+    background: transparent; color: var(--muted); font: inherit; font-size: 14px;
+  }
+  .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .langbtn { border: 1px solid var(--border); font-size: 13px; }
+  .spacer { margin-left: auto; }
+  #status { font-size: 13px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--err); }
+
+  /* ---- 布局：侧边栏 + 内容 ---- */
+  .layout { display: flex; align-items: flex-start; }
+  aside {
+    width: 240px; flex: 0 0 240px; border-right: 1px solid var(--border);
+    background: var(--panel); height: calc(100vh - 53px);
+    position: sticky; top: 53px; overflow-y: auto; padding: 12px;
+  }
+  aside.hide { display: none; }
+  .newchat {
+    width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 7px;
+    border: 1px dashed var(--border); background: transparent;
+    color: var(--accent); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .conv {
+    padding: 8px 9px; border-radius: 7px; cursor: pointer; font-size: 13px;
+    display: flex; gap: 6px; align-items: baseline;
+  }
+  .conv:hover { background: var(--bg); }
+  .conv.on { background: var(--accent-soft); }
+  .conv .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv .x { color: var(--muted); opacity: 0; font-size: 15px; line-height: 1; }
+  .conv:hover .x { opacity: 1; }
+  .conv .d { font-size: 11px; color: var(--muted); }
+  .sidenote { font-size: 12px; color: var(--muted); padding: 8px 4px; }
+
+  main { flex: 1; min-width: 0; max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card p.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
+  label span { font-weight: 400; color: var(--muted); }
+  input, select, textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 14px;
+  }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=checkbox] { width: auto; }
+  .inline { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } aside { display: none; } }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  button.btn {
+    padding: 9px 18px; border-radius: 7px; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; font: inherit; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  button.btn.ghost { background: transparent; color: var(--accent); }
+  button.btn.danger { background: transparent; color: var(--err); border-color: var(--err); }
+  button.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .msg { font-size: 13px; padding: 10px 12px; border-radius: 7px; margin-top: 14px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: var(--accent-soft); color: var(--ok); }
+  .msg.err { background: var(--accent-soft); color: var(--err); }
+
+  /* ---- 聊天 ---- */
+  .turn { margin-bottom: 22px; }
+  .who { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .bubble {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 13px 15px; white-space: pre-wrap; word-break: break-word;
+  }
+  .turn.me .bubble { background: var(--accent-soft); border-color: var(--accent-soft); }
+  .steps { margin: 8px 0; }
+  .step {
+    font-size: 13px; color: var(--muted); padding: 5px 0 5px 12px;
+    border-left: 2px solid var(--border);
+  }
+  .step b { color: var(--accent); font-weight: 600; }
+  details { margin-top: 5px; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+  pre.code {
+    background: var(--code-bg); padding: 10px; border-radius: 6px;
+    overflow-x: auto; margin: 6px 0 0; white-space: pre;
+  }
+  details.think > div {
+    background: var(--think-bg); border-radius: 7px; padding: 10px 12px; margin-top: 6px;
+    font-size: 13px; color: var(--muted); white-space: pre-wrap;
+    max-height: 320px; overflow-y: auto;
+  }
+  .chartbox {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-top: 8px; overflow-x: auto;
+  }
+  .chartbox h4 { margin: 0 0 2px; font-size: 14px; }
+  .chartbox .sub { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .chartbox svg { display: block; max-width: 100%; height: auto; }
+  .chartbox .bar { fill: var(--accent); }
+  .chartbox .bar:hover { opacity: .75; }
+  .chartbox text { fill: var(--muted); font-size: 11px;
+                   font-family: -apple-system, "PingFang SC", sans-serif; }
+  .chartbox text.val { fill: var(--text); }
+  .chartbox line { stroke: var(--border); }
+  /* ---- Markdown 渲染 ---- */
+  .bubble.md { white-space: normal; }
+  .bubble.md > :first-child { margin-top: 0; }
+  .bubble.md > :last-child { margin-bottom: 0; }
+  .bubble.md p { margin: 0 0 10px; }
+  .bubble.md h3, .bubble.md h4, .bubble.md h5, .bubble.md h6 {
+    margin: 16px 0 7px; line-height: 1.35;
+  }
+  .bubble.md h3 { font-size: 16px; }
+  .bubble.md h4 { font-size: 15px; }
+  .bubble.md h5, .bubble.md h6 { font-size: 14px; color: var(--muted); }
+  .bubble.md ul, .bubble.md ol { margin: 0 0 10px; padding-left: 22px; }
+  .bubble.md li { margin: 3px 0; }
+  .bubble.md li > ul { margin: 3px 0 0; }
+  .bubble.md code {
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+    font-size: 12.5px; word-break: break-all;
+  }
+  .bubble.md pre.mdcode {
+    background: var(--code-bg); padding: 10px 12px; border-radius: 7px;
+    overflow-x: auto; margin: 0 0 10px; white-space: pre; line-height: 1.5;
+  }
+  .bubble.md pre.mdcode code { background: none; padding: 0; }
+  .bubble.md blockquote {
+    margin: 0 0 10px; padding: 2px 0 2px 12px;
+    border-left: 3px solid var(--border); color: var(--muted);
+  }
+  .bubble.md hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+  .bubble.md a { color: var(--accent); }
+  /* 表格用独立容器横向滚动：窄屏上不能让整个页面横向滚 */
+  .bubble.md .mdtablewrap { overflow-x: auto; margin: 0 0 10px; }
+  .bubble.md table.mdtable {
+    border-collapse: collapse; font-size: 13px; min-width: 100%;
+  }
+  .bubble.md table.mdtable th, .bubble.md table.mdtable td {
+    border: 1px solid var(--border); padding: 6px 10px; vertical-align: top;
+  }
+  .bubble.md table.mdtable th {
+    background: var(--code-bg); font-weight: 600; white-space: nowrap;
+  }
+  .bubble.md table.mdtable tbody tr:nth-child(even) { background: var(--bg); }
+  .usage { font-size: 12px; color: var(--muted); margin-top: 7px; }
+  .spin::after { content: '…'; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { opacity: .3 } 50% { opacity: 1 } 100% { opacity: .3 } }
+
+  .composer { display: flex; gap: 10px; align-items: flex-end; margin-top: 8px; }
+  .composer textarea { flex: 1; }
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .examples button {
+    font: inherit; font-size: 13px; padding: 5px 11px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel);
+    color: var(--muted); border-radius: 14px;
+  }
+  .hidden { display: none !important; }
+  table.tools { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.tools td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.tools td:first-child { white-space: nowrap; font-family: ui-monospace, monospace; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 data-i18n="appTitle"></h1>
+  <div class="tabs">
+    <button class="tab on" data-tab="chat" data-i18n="tabChat"></button>
+    <button class="tab" data-tab="settings" data-i18n="tabSettings"></button>
+  </div>
+  <button class="iconbtn" id="togglebar" title="sidebar">☰</button>
+  <div class="spacer"></div>
+  <div id="status"></div>
+  <button class="langbtn" id="lang"></button>
+</header>
+
+<div class="layout">
+  <aside id="sidebar">
+    <button class="newchat" id="newchat" data-i18n="newChat"></button>
+    <div id="convlist"></div>
+    <div class="sidenote" id="convstats"></div>
+  </aside>
+
+  <main>
+    <!-- ================= 聊天页 ================= -->
+    <section id="tab-chat">
+      <div id="needSetup" class="card hidden">
+        <h2 data-i18n="setupTitle"></h2>
+        <p class="hint" data-i18n="setupHint"></p>
+        <button class="btn" onclick="switchTab('settings')" data-i18n="goSettings"></button>
+      </div>
+
+      <div class="examples" id="examples"></div>
+      <div id="chatlog"></div>
+
+      <div class="composer">
+        <textarea id="q" rows="2"></textarea>
+        <button class="btn" id="send" data-i18n="send"></button>
+      </div>
+    </section>
+
+    <!-- ================= 设置页 ================= -->
+    <section id="tab-settings" class="hidden">
+      <div class="card">
+        <h2 data-i18n="llmTitle"></h2>
+        <p class="hint"><span data-i18n="llmHint"></span> <code id="cfgpath"></code></p>
+
+        <div class="grid2">
+          <div>
+            <label data-i18n="provider"></label>
+            <select id="provider"></select>
+          </div>
+          <div>
+            <label data-i18n="model"></label>
+            <input id="model" list="modellist" autocomplete="off">
+            <datalist id="modellist"></datalist>
+          </div>
+        </div>
+        <p class="hint" style="margin:6px 0 0" data-i18n="modelHint"></p>
+
+        <label><span data-i18n="apiKey"></span> <span id="keystate"></span></label>
+        <input id="apikey" type="password" autocomplete="off">
+        <p class="hint" style="margin-top:6px">
+          <span data-i18n="keyWhere"></span>
+          <a id="keylink" href="#" target="_blank" rel="noopener"></a>
+        </p>
+
+        <div class="row">
+          <button class="btn ghost" id="test" data-i18n="testConn"></button>
+          <button class="btn" id="save" data-i18n="save"></button>
+          <button class="btn danger" id="delkey" data-i18n="delKey"></button>
+        </div>
+        <div class="msg" id="llmmsg"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="reasonTitle"></h2>
+        <p class="hint" data-i18n="reasonHint"></p>
+
+        <div class="grid2">
+          <div>
+            <label data-i18n="effort"></label>
+            <select id="effort"></select>
+          </div>
+          <div>
+            <label data-i18n="maxOut"></label>
+            <input id="maxout" type="number" min="0" max="400000" step="1024">
+          </div>
+        </div>
+        <p class="hint" style="margin:6px 0 0" id="effortnote"></p>
+        <p class="hint" style="margin:6px 0 0" data-i18n="maxOutHint"></p>
+
+        <label data-i18n="extraBody"></label>
+        <textarea id="extrabody" rows="3" spellcheck="false"></textarea>
+        <p class="hint" style="margin-top:6px">
+          <span data-i18n="extraHint"></span> <code id="extraexample"></code>
+        </p>
+
+        <div class="inline">
+          <input type="checkbox" id="showthink">
+          <label for="showthink" style="margin:0" data-i18n="showThink"></label>
+        </div>
+
+        <div class="row">
+          <button class="btn ghost" id="testreason" data-i18n="testConn"></button>
+          <button class="btn" id="savereason" data-i18n="save"></button>
+        </div>
+        <div class="msg" id="reasonmsg"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="dbTitle"></h2>
+        <p class="hint" data-i18n="dbHint"></p>
+        <label data-i18n="dsn"></label>
+        <input id="dburl" placeholder="postgresql://mda_viewer@localhost:5432/mda">
+        <div class="row">
+          <button class="btn ghost" id="restart" data-i18n="restartMcp"></button>
+          <button class="btn" id="savedb" data-i18n="saveReconnect"></button>
+        </div>
+        <div class="msg" id="dbmsg"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="histTitle"></h2>
+        <p class="hint" id="histinfo"></p>
+        <div class="row">
+          <button class="btn danger" id="clearhist" data-i18n="clearHist"></button>
+        </div>
+        <div class="msg" id="histmsg"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="idxTitle"></h2>
+        <p class="hint" data-i18n="idxHint"></p>
+        <div id="idxinfo" class="hint"></div>
+        <div class="row">
+          <button class="btn ghost" id="rebuildidx" data-i18n="idxRebuild"></button>
+        </div>
+        <div class="msg" id="idxmsg"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="mcpTitle"></h2>
+        <div id="mcpinfo" class="hint"></div>
+        <table class="tools" id="toollist"></table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================ 多语言
+// 界面文案集中放这里。要加语种就再加一个 key，其他代码都不用改。
+
+const I18N = {
+  zh: {
+    htmlLang: 'zh-CN',
+    appTitle: 'MDA 数据库问答',
+    tabChat: '聊天', tabSettings: '设置',
+    langBtn: 'EN', send: '发送', save: '保存', testConn: '测试连接',
+    setupTitle: '还没配置 API Key',
+    setupHint: '要先在「设置」里填入 DeepSeek 或 Gemini 的 API Key，才能开始提问。',
+    goSettings: '去设置',
+    askPlaceholder: '用中文提问，比如：帮我找找教育年限的数据在哪张表（Enter 发送，Shift+Enter 换行）',
+    examples: [
+      '数据库里有哪些数据集？',
+      'CSES 调查一共覆盖了多少户家庭？',
+      '帮我找一下和「收入」有关的变量在哪张表',
+      '2019 年受访家庭的平均规模是多少？',
+    ],
+    you: '你', assistant: '助手',
+    newChat: '＋ 新对话',
+    noConv: '还没有对话记录',
+    convStats: (c, m, kb) => `${c} 个对话 / ${m} 条消息 / ${kb} KB`,
+    confirmDelConv: '删除这个对话？',
+    renameConv: '重命名（双击标题）',
+    renamePrompt: '新的对话名称：',
+    llmTitle: 'LLM 配置',
+    llmHint: 'Key 会加密保存在你自己电脑的',
+    provider: '供应商', model: '模型',
+    modelHint: '可以自由输入。两家的模型 ID 换得很快，下拉列表只是建议。',
+    apiKey: 'API Key', keyWhere: '去哪里申请：', delKey: '删除已存的 Key',
+    keyFromEnv: '（当前由环境变量提供，网页里改动无效）',
+    keySaved: (h) => `（已保存：${h}，留空则不改动）`,
+    keyUnset: '（尚未设置）',
+    keyPlaceholder: '粘贴你的 API Key',
+    reasonTitle: '推理与 Token 控制',
+    reasonHint: '控制模型思考多久、花多少 token。想省钱或想要更快的回答就调低。',
+    effort: '推理档位 (reasoning_effort)',
+    effortDefault: '（用供应商默认值）',
+    maxOut: '输出 token 上限 (0 = 不限制)',
+    maxOutHint: '思考 token 也算在输出里，所以这是限制 thinking 开销最直接的手段。'
+              + '设太小会导致回答被截断。',
+    extraBody: '高级：原生参数直通 (JSON)',
+    extraHint: '上面两项表达不了时用，比如指定确切的 thinking_budget。例：',
+    showThink: '在聊天界面显示模型的思考过程',
+    dbTitle: '数据库连接',
+    dbHint: '密码不要写在这里 —— 留空即可，程序会自动从 ~/.pgpass 读取。修改后会自动重启 MCP Server。',
+    dsn: '连接串', restartMcp: '重启 MCP Server', saveReconnect: '保存并重连',
+    histTitle: '聊天历史',
+    histInfo: (c, m, path) => `${c} 个对话、${m} 条消息，存放在 ${path}（SQLite 文件，`
+                            + `不在 mda 数据库里 —— 那是只读的）。`,
+    clearHist: '清空全部历史',
+    confirmClearHist: '确定删除全部聊天历史？此操作不可撤销。',
+    mcpTitle: 'MCP Server 状态',
+    idxTitle: '元数据索引',
+    idxHint: '变量搜索用的本地索引（SQLite 全文检索）。数据库新增调查或变量后，'
+           + '或者刚开通新 schema 权限后，需要重建一次才能搜到新内容。',
+    idxRebuild: '重建索引',
+    idxRebuilding: '正在重建，可能需要 1-2 分钟…',
+    idxDone: (n, s) => `重建完成：${n.toLocaleString()} 条，用时 ${s} 秒。`,
+    idxInfo: (n, d, mb) => `${n.toLocaleString()} 条变量元数据，${d} 天前建立，${mb} MB。`,
+    idxNone: '还没有建立索引，变量搜索无法使用。请点「重建索引」。',
+    idxStale: '⚠ 索引较旧，如果期间有新数据入库建议重建。',
+    idxSkipped: (list) => `未纳入（无数据库权限）：${list}`,
+    chartTitle: '图表',
+    saved: '已保存。', savedReconnected: '已保存，MCP Server 已重连。',
+    deleted: '已删除。', testing: '正在测试…', restarting: '正在重启…',
+    confirmDelKey: '确定删除已保存的 API Key？',
+    fillKeyFirst: '请先填写并保存 API Key。',
+    reqFailed: (m) => '请求失败：' + m,
+    restartOk: (n) => `重启成功，加载了 ${n} 个工具。`,
+    restartFail: (m) => '重启失败：' + m,
+    backendDown: '后端未响应',
+    dbDown: '数据库未连接',
+    connected: (n) => `已连接 ${n} 张表`,
+    keyMissing: 'Key 未配置',
+    mcpOk: (dsn, s, t) => `已连接 ${dsn}，${s} 个 schema、${t} 张表可访问。`,
+    mcpBad: '未连接。请检查上面的连接串，然后点「保存并重连」。',
+    statusThinking: '正在思考…', statusContinuing: '继续分析…',
+    viewSql: '查看 SQL', thinkBlock: '思考过程',
+    noText: '(模型没有返回文字)',
+    disconnected: (m) => '⚠️ 连接中断：' + m,
+    sum: {
+      rows: (a) => `返回 ${a.n} 行 × ${a.cols} 列` + (a.truncated ? '（结果已截断）' : ''),
+      hits: (a) => `命中 ${a.n} 条` + (a.tables.length ? `，主要在 ${a.tables.join('、')}` : ''),
+      cols: (a) => `${a.cols} 列，约 ${a.rows ?? '?'} 行`,
+      schemas: (a) => `${a.n} 个 schema`,
+      tables: (a) => `${a.n} 张表`,
+      sampled: (a) => `抽了 ${a.n} 行`,
+      toolerror: (a) => `出错：${a.message}`,
+      chars: (a) => `${a.n} 字符`,
+      plotted: (a) => `已生成${a.kind === 'histogram' ? '直方图' : '条形图'}（${a.n} 组）`,
+      varstats: (a) => `${a.answered?.toLocaleString() ?? '?'} / ${a.total?.toLocaleString() ?? '?'} 条有回答（${a.rate ?? '?'}%）`,
+      found: (a) => `命中 ${a.n} 条` + (a.total && a.total > a.n ? `（共 ${a.total} 条匹配）` : ''),
+      surveys: (a) => `${a.n} 个调查项目`,
+      sections: (a) => `${a.n} 个 section`,
+      guide: (a) => `读取指南 ${a.n} 章` + (a.issues ? `，${a.issues} 个未解决数据问题` : ''),
+    },
+    usage: (u) => {
+      const p = [];
+      if (u.prompt_tokens) p.push(`输入 ${u.prompt_tokens}`);
+      if (u.reasoning_tokens) p.push(`思考 ${u.reasoning_tokens}`);
+      if (u.completion_tokens) p.push(`输出 ${u.completion_tokens}`);
+      if (u.cached_tokens) p.push(`缓存命中 ${u.cached_tokens}`);
+      return p.length ? 'token：' + p.join(' · ') : '';
+    },
+  },
+  en: {
+    htmlLang: 'en',
+    appTitle: 'MDA Database Q&A',
+    tabChat: 'Chat', tabSettings: 'Settings',
+    langBtn: '中文', send: 'Send', save: 'Save', testConn: 'Test connection',
+    setupTitle: 'No API key configured',
+    setupHint: 'Add a DeepSeek or Gemini API key under Settings before asking questions.',
+    goSettings: 'Open settings',
+    askPlaceholder: 'Ask in English, e.g. "which table holds years of education?" '
+                  + '(Enter to send, Shift+Enter for a newline)',
+    examples: [
+      'What datasets are in this database?',
+      'How many households does the CSES survey cover in total?',
+      'Where can I find variables about income?',
+      'What was the average household size in 2019?',
+    ],
+    you: 'You', assistant: 'Assistant',
+    newChat: '＋ New chat',
+    noConv: 'No saved conversations yet',
+    convStats: (c, m, kb) => `${c} chats / ${m} messages / ${kb} KB`,
+    confirmDelConv: 'Delete this conversation?',
+    renameConv: 'Rename (double-click the title)',
+    renamePrompt: 'New conversation name:',
+    llmTitle: 'LLM configuration',
+    llmHint: 'The key is encrypted and stored on your own machine at',
+    provider: 'Provider', model: 'Model',
+    modelHint: 'Free text. Model IDs change often, so the dropdown is only a suggestion.',
+    apiKey: 'API key', keyWhere: 'Get one at: ', delKey: 'Delete stored key',
+    keyFromEnv: '(currently supplied by an environment variable; edits here have no effect)',
+    keySaved: (h) => `(stored: ${h} — leave blank to keep it)`,
+    keyUnset: '(not set)',
+    keyPlaceholder: 'Paste your API key',
+    reasonTitle: 'Reasoning & token controls',
+    reasonHint: 'Control how long the model thinks and how many tokens it spends. '
+              + 'Lower it for cheaper, faster answers.',
+    effort: 'Reasoning effort',
+    effortDefault: "(provider's default)",
+    maxOut: 'Max output tokens (0 = unlimited)',
+    maxOutHint: 'Thinking tokens count as output, so this is the most direct way to cap '
+              + 'thinking cost. Setting it too low truncates the answer.',
+    extraBody: 'Advanced: raw provider parameters (JSON)',
+    extraHint: 'For anything the two controls above cannot express, e.g. an exact '
+             + 'thinking_budget. Example: ',
+    showThink: 'Show the model’s reasoning in the chat',
+    dbTitle: 'Database connection',
+    dbHint: 'Do not put the password here — leave it out and it is read from ~/.pgpass. '
+          + 'Saving restarts the MCP server.',
+    dsn: 'Connection string', restartMcp: 'Restart MCP server', saveReconnect: 'Save & reconnect',
+    histTitle: 'Chat history',
+    histInfo: (c, m, path) => `${c} conversations, ${m} messages, stored in ${path} `
+                            + `(a SQLite file — not in the mda database, which is read-only).`,
+    clearHist: 'Delete all history',
+    confirmClearHist: 'Delete all chat history? This cannot be undone.',
+    mcpTitle: 'MCP server status',
+    idxTitle: 'Metadata index',
+    idxHint: 'Local full-text index (SQLite) used by variable search. Rebuild it after '
+           + 'new surveys or variables are loaded, or after granting access to a new schema.',
+    idxRebuild: 'Rebuild index',
+    idxRebuilding: 'Rebuilding, this can take 1-2 minutes…',
+    idxDone: (n, s) => `Done: ${n.toLocaleString()} entries in ${s}s.`,
+    idxInfo: (n, d, mb) => `${n.toLocaleString()} variable entries, built ${d} days ago, ${mb} MB.`,
+    idxNone: 'No index yet — variable search will not work. Click "Rebuild index".',
+    idxStale: '⚠ The index is old; rebuild it if data has been loaded since.',
+    idxSkipped: (list) => `Not included (no database access): ${list}`,
+    chartTitle: 'Chart',
+    saved: 'Saved.', savedReconnected: 'Saved. MCP server reconnected.',
+    deleted: 'Deleted.', testing: 'Testing…', restarting: 'Restarting…',
+    confirmDelKey: 'Delete the stored API key?',
+    fillKeyFirst: 'Please enter and save an API key first.',
+    reqFailed: (m) => 'Request failed: ' + m,
+    restartOk: (n) => `Restarted, ${n} tools loaded.`,
+    restartFail: (m) => 'Restart failed: ' + m,
+    backendDown: 'Backend not responding',
+    dbDown: 'Database not connected',
+    connected: (n) => `${n} tables connected`,
+    keyMissing: 'No API key',
+    mcpOk: (dsn, s, t) => `Connected to ${dsn}. ${s} schemas, ${t} tables accessible.`,
+    mcpBad: 'Not connected. Check the connection string above, then "Save & reconnect".',
+    statusThinking: 'Thinking…', statusContinuing: 'Continuing…',
+    viewSql: 'View SQL', thinkBlock: 'Reasoning',
+    noText: '(the model returned no text)',
+    disconnected: (m) => '⚠️ Connection lost: ' + m,
+    sum: {
+      rows: (a) => `${a.n} rows × ${a.cols} columns` + (a.truncated ? ' (truncated)' : ''),
+      hits: (a) => `${a.n} matches` + (a.tables.length ? `, mostly in ${a.tables.join(', ')}` : ''),
+      cols: (a) => `${a.cols} columns, ~${a.rows ?? '?'} rows`,
+      schemas: (a) => `${a.n} schemas`,
+      tables: (a) => `${a.n} tables`,
+      sampled: (a) => `sampled ${a.n} rows`,
+      toolerror: (a) => `Error: ${a.message}`,
+      chars: (a) => `${a.n} chars`,
+      plotted: (a) => `${a.kind === 'histogram' ? 'Histogram' : 'Bar chart'} ready (${a.n} groups)`,
+      varstats: (a) => `${a.answered?.toLocaleString() ?? '?'} / ${a.total?.toLocaleString() ?? '?'} answered (${a.rate ?? '?'}%)`,
+      found: (a) => `${a.n} matches` + (a.total && a.total > a.n ? ` (of ${a.total})` : ''),
+      surveys: (a) => `${a.n} survey programmes`,
+      sections: (a) => `${a.n} sections`,
+      guide: (a) => `read ${a.n} guide sections` + (a.issues ? `, ${a.issues} open data issues` : ''),
+    },
+    usage: (u) => {
+      const p = [];
+      if (u.prompt_tokens) p.push(`in ${u.prompt_tokens}`);
+      if (u.reasoning_tokens) p.push(`thinking ${u.reasoning_tokens}`);
+      if (u.completion_tokens) p.push(`out ${u.completion_tokens}`);
+      if (u.cached_tokens) p.push(`cached ${u.cached_tokens}`);
+      return p.length ? 'tokens: ' + p.join(' · ') : '';
+    },
+  },
+};
+
+let LANG = localStorage.getItem('mda_lang') || 'zh';
+const T = () => I18N[LANG];
+
+// ============================================================ Markdown 渲染
+//
+// 为什么自己写而不引 marked + DOMPurify：
+//   1. 保持单文件零依赖、离线可用（CDN 挂了不会变成空白页）
+//   2. 安全模型简单到能一眼看完——先把整段文本转义，之后本函数生成的标签
+//      就是页面上唯一的 HTML，LLM 输出和数据库内容都无法注入
+//
+// 占位符用 <F0> 这种形式：转义之后文本里不可能再有 "<"（都成了 &lt;），
+// 所以原始输入无论写什么都撞不上占位符。
+//
+// 故意不支持 _斜体_ 和 __粗体__：
+//   这个库的变量名全是下划线（years_attended_school、q0611__2020_000cb8d1），
+//   支持下划线强调会把变量名渲染成 years<em>attended</em>school。
+//   LLM 写强调基本都用 *，所以这个取舍没有损失。
+
+// 站内相对路径用单斜杠开头；`//evil.com` 是协议相对 URL，会跳到外站，
+// 所以用 (?!\/) 排除掉。
+const MD_SAFE_URL = /^(https?:\/\/|mailto:|\/(?!\/))/i;
+
+/** 行内格式。传入的必须是已转义过的文本。 */
+function mdInline(s) {
+  return s
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+    // 链接只放行 http(s) / mailto / 站内相对路径，其余原样显示成文本
+    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, text, url) =>
+      MD_SAFE_URL.test(url)
+        ? '<a href="' + url + '" target="_blank" rel="noopener noreferrer">'
+          + text + '</a>'
+        : m);
+}
+
+function renderMarkdown(source) {
+  // 1) 整体转义。之后出现的每个 "<" 都是本函数自己加的。
+  let text = esc(source || '');
+
+  // 2) 围栏代码块抽出占位，免得里面的内容被当 Markdown 处理
+  const fences = [];
+  text = text.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, function (m, lang, code) {
+    fences.push(code.replace(/\n$/, ''));
+    return '<F' + (fences.length - 1) + '>';
+  });
+
+  // 3) 行内代码同样占位
+  const codes = [];
+  text = text.replace(/`([^`\n]+)`/g, function (m, code) {
+    codes.push(code);
+    return '<C' + (codes.length - 1) + '>';
+  });
+
+  const lines = text.split('\n');
+  const out = [];
+  let i = 0;
+
+  const isTableSep = (l) =>
+    /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
+  const cells = (l) =>
+    l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
+  const isBlockStart = (l, next) =>
+    /^#{1,6}\s/.test(l) || /^\s*>/.test(l) || /^\s*([-*+]|\d+[.)])\s/.test(l)
+    || /^<F\d+>\s*$/.test(l)
+    || (l.includes('|') && next !== undefined && isTableSep(next));
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 独占一行的代码块占位符
+    let m = line.match(/^<F(\d+)>\s*$/);
+    if (m) { out.push('<pre class="mdcode">' + fences[+m[1]] + '</pre>'); i++; continue; }
+
+    if (!line.trim()) { i++; continue; }
+
+    // 标题。气泡里从 h3 起步，免得比周围文字大太多。
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+      const lv = Math.min(6, m[1].length + 2);
+      out.push('<h' + lv + '>' + mdInline(m[2].trim()) + '</h' + lv + '>');
+      i++; continue;
+    }
+
+    // 分割线
+    if (/^\s*([-*])\s*(\1\s*){2,}$/.test(line)) { out.push('<hr>'); i++; continue; }
+
+    // 表格：本行含 |，下一行是分隔行
+    if (line.includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      const head = cells(line);
+      const align = cells(lines[i + 1]).map((c) =>
+        /^:-+:$/.test(c) ? 'center' : /-+:$/.test(c) ? 'right' : 'left');
+      const body = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+        body.push(cells(lines[i])); i++;
+      }
+      const th = head.map((c, k) =>
+        '<th style="text-align:' + (align[k] || 'left') + '">' + mdInline(c) + '</th>'
+      ).join('');
+      const tr = body.map((row) => '<tr>' + head.map((_, k) =>
+        '<td style="text-align:' + (align[k] || 'left') + '">'
+        + mdInline(row[k] || '') + '</td>').join('') + '</tr>').join('');
+      out.push('<div class="mdtablewrap"><table class="mdtable"><thead><tr>'
+               + th + '</tr></thead><tbody>' + tr + '</tbody></table></div>');
+      continue;
+    }
+
+    // 引用
+    if (/^\s*>\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^\s*>\s?/, '')); i++;
+      }
+      out.push('<blockquote>' + mdInline(buf.join(' ')) + '</blockquote>');
+      continue;
+    }
+
+    // 列表（按缩进支持一层嵌套）
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
+      const ordered = /^\s*\d+[.)]\s+/.test(line);
+      const items = [];
+      const base = line.match(/^\s*/)[0].length;
+      while (i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) {
+        const ind = lines[i].match(/^\s*/)[0].length;
+        const body = lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, '');
+        if (ind > base + 1 && items.length) items[items.length - 1].sub.push(body);
+        else items.push({ body: body, sub: [] });
+        i++;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      out.push('<' + tag + '>' + items.map((it) =>
+        '<li>' + mdInline(it.body)
+        + (it.sub.length
+            ? '<ul>' + it.sub.map((s) => '<li>' + mdInline(s) + '</li>').join('') + '</ul>'
+            : '')
+        + '</li>').join('') + '</' + tag + '>');
+      continue;
+    }
+
+    // 段落：连续的普通行合成一段，行内换行保留成 <br>
+    const para = [];
+    while (i < lines.length && lines[i].trim()
+           && !isBlockStart(lines[i], lines[i + 1])) {
+      para.push(lines[i]); i++;
+    }
+    if (para.length) out.push('<p>' + mdInline(para.join('<br>')) + '</p>');
+    else i++;   // 兜底，防死循环
+  }
+
+  // 4) 最后还原占位符，这样代码内容不会被行内格式动过
+  return out.join('')
+    .replace(/<C(\d+)>/g, (m, k) => '<code>' + codes[+k] + '</code>')
+    .replace(/<F(\d+)>/g, (m, k) => '<pre class="mdcode">' + fences[+k] + '</pre>');
+}
+
+/** 把 Markdown 写进气泡。
+ *
+ * immediate=false 时做节流：流式输出每来一个 token 就重排一次表格太抖也太费，
+ * 攒到 120ms 渲染一次；immediate=true 用于最终定稿。
+ * 原文存在 dataset 上，定时器回调里取最新值，不会渲染到过期内容。
+ */
+function setMarkdown(bubble, text, immediate) {
+  bubble.dataset.md = text;
+  const paint = () => {
+    bubble._mdTimer = null;
+    bubble.classList.add('md');
+    bubble.innerHTML = renderMarkdown(bubble.dataset.md || '');
+  };
+  if (immediate) {
+    if (bubble._mdTimer) clearTimeout(bubble._mdTimer);
+    paint();
+    return;
+  }
+  if (!bubble._mdTimer) bubble._mdTimer = setTimeout(paint, 120);
+}
+
+// ============================================================ 工具函数
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function flash(elId, text, ok) {
+  const el = $(elId);
+  el.textContent = text;
+  el.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+
+function applyLang() {
+  const t = T();
+  document.documentElement.lang = t.htmlLang;
+  document.title = t.appTitle;
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const v = t[el.dataset.i18n];
+    if (typeof v === 'string') el.textContent = v;
+  });
+  $('lang').textContent = t.langBtn;
+  $('q').placeholder = t.askPlaceholder;
+  $('apikey').placeholder = t.keyPlaceholder;
+  $('examples').innerHTML = t.examples
+    .map((e) => `<button>${esc(e)}</button>`).join('');
+  document.querySelectorAll('#examples button').forEach((b) => {
+    b.onclick = () => { $('q').value = b.textContent; ask(); };
+  });
+  if (CONFIG) { renderModels(); renderKeyState(); }
+  renderConvList();
+  loadStatus();
+}
+
+$('lang').onclick = () => {
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('mda_lang', LANG);
+  applyLang();
+  // 界面语言同时决定模型用哪种语言回答，所以要存到后端
+  fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language: LANG }),
+  });
+};
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(
+    (t) => t.classList.toggle('on', t.dataset.tab === name));
+  $('tab-chat').classList.toggle('hidden', name !== 'chat');
+  $('tab-settings').classList.toggle('hidden', name !== 'settings');
+  if (name === 'settings') { loadStatus(); loadIndexInfo(); }
+}
+document.querySelectorAll('.tab').forEach(
+  (t) => t.onclick = () => switchTab(t.dataset.tab));
+
+$('togglebar').onclick = () => $('sidebar').classList.toggle('hide');
+
+// ============================================================ 配置
+
+let CONFIG = null;
+
+async function loadConfig() {
+  CONFIG = await (await fetch('/api/config')).json();
+
+  // 后端存的语言只在首次进入时采用，之后以本地选择为准
+  if (!localStorage.getItem('mda_lang') && CONFIG.language) LANG = CONFIG.language;
+
+  $('provider').innerHTML = Object.entries(CONFIG.providers)
+    .map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('');
+  $('provider').value = CONFIG.provider;
+
+  $('dburl').value = CONFIG.database_url;
+  $('cfgpath').textContent = CONFIG.config_path;
+  $('maxout').value = CONFIG.max_output_tokens || 0;
+  $('extrabody').value = CONFIG.extra_body || '';
+  $('showthink').checked = !!CONFIG.show_thinking;
+
+  renderModels();
+  renderKeyState();
+  $('needSetup').classList.toggle('hidden', CONFIG.api_key_set);
+}
+
+function renderModels() {
+  const t = T();
+  const p = CONFIG.providers[$('provider').value];
+
+  $('modellist').innerHTML = p.models.map((m) => `<option value="${m}">`).join('');
+  if (!$('model').value || !CONFIG.providers[CONFIG.provider].models.includes($('model').value)) {
+    $('model').value = CONFIG.model || p.default_model;
+  }
+
+  // 推理档位的可选值随供应商变——DeepSeek 有 max，Gemini 有 minimal/medium
+  $('effort').innerHTML = p.efforts.map((e) =>
+    `<option value="${e}">${e === '' ? esc(t.effortDefault) : e}</option>`).join('');
+  $('effort').value = p.efforts.includes(CONFIG.reasoning_effort)
+    ? CONFIG.reasoning_effort : '';
+
+  $('effortnote').textContent = LANG === 'zh' ? p.effort_note_zh : p.effort_note_en;
+  $('extraexample').textContent = p.extra_body_example;
+  $('keylink').href = p.key_url;
+  $('keylink').textContent = p.key_url;
+}
+
+function renderKeyState() {
+  const t = T();
+  $('keystate').textContent = CONFIG.api_key_from_env ? t.keyFromEnv
+    : CONFIG.api_key_set ? t.keySaved(CONFIG.api_key_hint) : t.keyUnset;
+}
+
+$('provider').onchange = () => {
+  // 换供应商时把模型清空，让 renderModels 填上新供应商的默认模型
+  $('model').value = '';
+  CONFIG.model = '';
+  renderModels();
+};
+
+function formPayload() {
+  const body = {
+    provider: $('provider').value,
+    model: $('model').value.trim(),
+    database_url: $('dburl').value.trim(),
+    reasoning_effort: $('effort').value,
+    max_output_tokens: parseInt($('maxout').value, 10) || 0,
+    extra_body: $('extrabody').value.trim(),
+    show_thinking: $('showthink').checked,
+    language: LANG,
+  };
+  const key = $('apikey').value.trim();
+  if (key) body.api_key = key;
+  return body;
+}
+
+async function doTest(msgId) {
+  const t = T();
+  flash(msgId, t.testing, true);
+  try {
+    const r = await (await fetch('/api/config/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formPayload()),
+    })).json();
+    flash(msgId, r.message, r.ok);
+  } catch (e) {
+    flash(msgId, t.reqFailed(e.message), false);
+  }
+}
+
+async function saveConfig(msgId) {
+  const t = T();
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formPayload()),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    flash(msgId, err.detail || t.reqFailed(res.status), false);
+    return;
+  }
+  const r = await res.json();
+  $('apikey').value = '';
+  await loadConfig();
+  await loadStatus();
+  if (r.mcp_error) flash(msgId, r.mcp_error, false);
+  else flash(msgId, r.mcp_restarted ? t.savedReconnected : t.saved, true);
+}
+
+$('test').onclick = () => doTest('llmmsg');
+$('testreason').onclick = () => doTest('reasonmsg');
+$('save').onclick = () => saveConfig('llmmsg');
+$('savereason').onclick = () => saveConfig('reasonmsg');
+$('savedb').onclick = () => saveConfig('dbmsg');
+
+$('delkey').onclick = async () => {
+  if (!confirm(T().confirmDelKey)) return;
+  await fetch('/api/config/key', { method: 'DELETE' });
+  await loadConfig();
+  flash('llmmsg', T().deleted, true);
+};
+
+$('restart').onclick = async () => {
+  const t = T();
+  flash('dbmsg', t.restarting, true);
+  const r = await (await fetch('/api/mcp/restart', { method: 'POST' })).json();
+  flash('dbmsg', r.ok ? t.restartOk(r.tools) : t.restartFail(r.message), r.ok);
+  loadStatus();
+};
+
+// ============================================================ 状态
+
+async function loadStatus() {
+  const t = T();
+  let s;
+  try {
+    s = await (await fetch('/api/status')).json();
+  } catch {
+    $('status').innerHTML = `<span class="dot bad"></span>${esc(t.backendDown)}`;
+    return;
+  }
+
+  const parts = [s.mcp_connected
+    ? `<span class="dot ok"></span>${esc(t.connected(s.table_count ?? '?'))}`
+    : `<span class="dot bad"></span>${esc(t.dbDown)}`];
+  parts.push(s.api_key_set ? `${esc(s.provider)} / ${esc(s.model)}` : esc(t.keyMissing));
+  if (s.reasoning_effort) parts.push('effort=' + esc(s.reasoning_effort));
+  $('status').innerHTML = parts.join(' · ');
+
+  $('mcpinfo').textContent = s.mcp_connected
+    ? t.mcpOk(s.database_url, s.schema_count, s.table_count)
+      + (s.db_error ? ` ${s.db_error}` : '')
+    : t.mcpBad;
+
+  $('toollist').innerHTML = (s.tools || [])
+    .map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.description)}</td></tr>`).join('');
+}
+
+// ============================================================ 元数据索引
+
+async function loadIndexInfo() {
+  const t = T();
+  let d;
+  try {
+    d = await (await fetch('/api/index')).json();
+  } catch {
+    $('idxinfo').textContent = '';
+    return;
+  }
+  if (!d.exists) {
+    $('idxinfo').textContent = t.idxNone;
+    return;
+  }
+  const lines = [t.idxInfo(d.total_rows || 0, d.age_days ?? '?', d.size_mb ?? '?')];
+  if (d.stale) lines.push(t.idxStale);
+  const skipped = Object.keys(d.skipped || {});
+  if (skipped.length) lines.push(t.idxSkipped(skipped.join(', ')));
+  const per = Object.entries(d.per_project || {})
+    .map(([k, v]) => `${k}: ${Object.values(v).reduce((a, b) => a + b, 0).toLocaleString()}`);
+  if (per.length) lines.push(per.join(' · '));
+  $('idxinfo').textContent = lines.join('  ');
+}
+
+$('rebuildidx').onclick = async () => {
+  const t = T();
+  $('rebuildidx').disabled = true;
+  flash('idxmsg', t.idxRebuilding, true);
+  try {
+    const r = await (await fetch('/api/index/rebuild', { method: 'POST' })).json();
+    if (r.ok) flash('idxmsg', t.idxDone(r.total_rows, r.elapsed_seconds), true);
+    else flash('idxmsg', r.error || t.reqFailed('?'), false);
+  } catch (e) {
+    flash('idxmsg', t.reqFailed(e.message), false);
+  }
+  $('rebuildidx').disabled = false;
+  loadIndexInfo();
+};
+
+// ============================================================ 会话列表
+
+let CONVS = [];
+let CURRENT = null;   // 当前会话 id，null = 新对话（提问后由后端分配）
+
+async function loadConvs() {
+  try {
+    const r = await (await fetch('/api/conversations')).json();
+    CONVS = r.conversations || [];
+    window.HSTATS = r.stats || {};
+  } catch { CONVS = []; }
+  renderConvList();
+  renderHistInfo();
+}
+
+function renderConvList() {
+  const t = T();
+  if (!CONVS.length) {
+    $('convlist').innerHTML = `<div class="sidenote">${esc(t.noConv)}</div>`;
+    $('convstats').textContent = '';
+    return;
+  }
+  $('convlist').innerHTML = CONVS.map((c) => {
+    const d = new Date(c.updated_at * 1000);
+    const when = `${d.getMonth() + 1}/${d.getDate()}`;
+    return `<div class="conv${c.id === CURRENT ? ' on' : ''}" data-id="${c.id}">`
+         + `<span class="t" title="${esc(c.title)}\n${esc(t.renameConv)}">`
+         + `${esc(c.title || '…')}</span>`
+         + `<span class="d">${when}</span>`
+         + `<span class="x" data-del="${c.id}">×</span></div>`;
+  }).join('');
+
+  $('convlist').querySelectorAll('.conv').forEach((el) => {
+    el.onclick = (e) => {
+      if (e.target.dataset.del) { delConv(e.target.dataset.del); return; }
+      openConv(el.dataset.id);
+    };
+    // 标题是用第一句提问自动生成的，给客户演示前多半要改成像样的名字
+    el.ondblclick = (e) => {
+      e.stopPropagation();
+      renameConv(el.dataset.id);
+    };
+  });
+
+  const s = window.HSTATS || {};
+  $('convstats').textContent = t.convStats(
+    s.conversations ?? CONVS.length, s.messages ?? 0,
+    Math.round((s.size_bytes || 0) / 1024));
+}
+
+function renderHistInfo() {
+  const s = window.HSTATS || {};
+  $('histinfo').textContent = T().histInfo(
+    s.conversations ?? 0, s.messages ?? 0, s.path ?? '');
+}
+
+$('newchat').onclick = () => {
+  CURRENT = null;
+  $('chatlog').innerHTML = '';
+  $('examples').classList.remove('hidden');
+  renderConvList();
+  switchTab('chat');
+};
+
+async function renameConv(id) {
+  const current = CONVS.find((c) => c.id === id);
+  const title = prompt(T().renamePrompt, current?.title || '');
+  if (title === null || !title.trim()) return;
+  await fetch('/api/conversations/' + id, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: title.trim() }),
+  });
+  await loadConvs();
+}
+
+async function delConv(id) {
+  if (!confirm(T().confirmDelConv)) return;
+  await fetch('/api/conversations/' + id, { method: 'DELETE' });
+  if (CURRENT === id) { CURRENT = null; $('chatlog').innerHTML = ''; }
+  await loadConvs();
+}
+
+$('clearhist').onclick = async () => {
+  if (!confirm(T().confirmClearHist)) return;
+  await fetch('/api/conversations', { method: 'DELETE' });
+  CURRENT = null;
+  $('chatlog').innerHTML = '';
+  await loadConvs();
+  flash('histmsg', T().deleted, true);
+};
+
+/** 打开一个已存的会话，把当时的工具调用过程和思考内容一起还原出来。 */
+async function openConv(id) {
+  const t = T();
+  const conv = await (await fetch('/api/conversations/' + id)).json();
+  CURRENT = id;
+  switchTab('chat');
+  $('examples').classList.add('hidden');
+  $('chatlog').innerHTML = '';
+
+  for (const m of conv.messages) {
+    if (m.role === 'user') { addTurn('me', t.you, m.content); continue; }
+
+    const turn = document.createElement('div');
+    turn.className = 'turn';
+    turn.innerHTML = `<div class="who">${esc(t.assistant)}</div>`
+                   + '<div class="steps"></div><div class="bubble"></div>';
+    $('chatlog').appendChild(turn);
+
+    const steps = turn.querySelector('.steps');
+    for (const ev of m.steps || []) {
+      if (ev.type === 'chart') renderChart(steps, ev.chart);
+      else renderStep(steps, ev);
+    }
+
+    if (m.thinking) {
+      const d = document.createElement('details');
+      d.className = 'think';
+      d.innerHTML = `<summary>${esc(t.thinkBlock)}</summary><div>${esc(m.thinking)}</div>`;
+      steps.appendChild(d);
+    }
+
+    const bubble = turn.querySelector('.bubble');
+    if (m.content) setMarkdown(bubble, m.content, true);
+    else bubble.textContent = m.error ? '⚠️ ' + m.error : t.noText;
+    if (m.usage && Object.keys(m.usage).length) {
+      const u = document.createElement('div');
+      u.className = 'usage';
+      u.textContent = t.usage(m.usage);
+      turn.appendChild(u);
+    }
+  }
+  renderConvList();
+  $('chatlog').lastElementChild?.scrollIntoView({ block: 'end' });
+}
+
+// ============================================================ 聊天
+
+let BUSY = false;
+
+$('send').onclick = ask;
+$('q').onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+};
+
+function addTurn(cls, who, text) {
+  const div = document.createElement('div');
+  div.className = 'turn ' + cls;
+  div.innerHTML = `<div class="who">${esc(who)}</div><div class="bubble">${esc(text)}</div>`;
+  $('chatlog').appendChild(div);
+  div.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  return div;
+}
+
+/** 把图表规格画成内联 SVG。
+ *
+ * 为什么手写 SVG 而不用 Chart.js：不引外部依赖，离线可用，
+ * 而且给客户演示时可以直接另存/打印，不会因为 CDN 挂了变成空白。
+ */
+function renderChart(container, chart) {
+  const pts = chart.points || [];
+  if (!pts.length) return null;
+
+  const box = document.createElement('div');
+  box.className = 'chartbox';
+
+  const head = document.createElement('h4');
+  head.textContent = chart.title || T().chartTitle;
+  box.appendChild(head);
+  if (chart.subtitle) {
+    const sub = document.createElement('p');
+    sub.className = 'sub';
+    sub.textContent = chart.subtitle;
+    box.appendChild(sub);
+  }
+
+  // 横向条形图：标签可能很长（"Liquefied petroleum gas (LPG)"），
+  // 竖着放会挤成一团，横着放每个标签有整行空间。
+  const rowH = 22, gap = 4, padT = 8, padB = 22;
+
+  // 估算一段文字的像素宽度。中日韩字符的字形宽度差不多是拉丁字母的两倍，
+  // 一律按 6.6px/字算的话，含中文的标签会溢出压到条形上。
+  const textW = (s) => {
+    let w = 0;
+    for (const ch of String(s ?? '')) {
+      w += /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFF60]/.test(ch) ? 12 : 6.6;
+    }
+    return w;
+  };
+  // 按像素宽度截断，而不是按字符数——否则中文标签截出来还是太长
+  const clip = (s, maxPx) => {
+    const str = String(s ?? '');
+    if (textW(str) <= maxPx) return str;
+    let out = '', w = 0;
+    for (const ch of str) {
+      const cw = textW(ch);
+      if (w + cw > maxPx - 8) break;
+      out += ch; w += cw;
+    }
+    return out + '…';
+  };
+
+  const labelW = Math.min(210, Math.max(70, ...pts.map((p) => textW(p.label) + 10)));
+  const valueW = 74;
+  const plotW = 300;
+  const W = labelW + plotW + valueW + 16;
+  const H = padT + pts.length * (rowH + gap) + padB;
+  const max = Math.max(...pts.map((p) => Math.abs(Number(p.value) || 0)), 1);
+
+  const fmt = (v) => {
+    const n = Number(v) || 0;
+    if (Math.abs(n) >= 1e7) return (n / 1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e4) return Math.round(n / 1e3) + 'k';
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
+  const parts = [`<svg viewBox="0 0 ${W} ${H}" role="img" width="${W}">`];
+  pts.forEach((p, i) => {
+    const y = padT + i * (rowH + gap);
+    const w = Math.max(1, (Math.abs(Number(p.value) || 0) / max) * plotW);
+    const label = String(p.label ?? p.code ?? '');
+    const short = clip(label, labelW - 10);
+    parts.push(
+      `<text x="${labelW - 6}" y="${y + rowH / 2 + 4}" text-anchor="end">`
+      + `${esc(short)}</text>`,
+      `<rect class="bar" x="${labelW}" y="${y + 3}" width="${w}" `
+      + `height="${rowH - 6}" rx="2"><title>${esc(label)}: `
+      + `${esc(Number(p.value).toLocaleString())}</title></rect>`,
+      `<text class="val" x="${labelW + w + 7}" y="${y + rowH / 2 + 4}">`
+      + `${esc(fmt(p.value))}</text>`,
+    );
+  });
+  // 基线 + 轴说明
+  const baseY = padT + pts.length * (rowH + gap);
+  parts.push(
+    `<line x1="${labelW}" y1="${padT - 2}" x2="${labelW}" y2="${baseY}"/>`,
+    `<text x="${labelW}" y="${baseY + 14}">0</text>`,
+    `<text x="${labelW + plotW}" y="${baseY + 14}" text-anchor="end">`
+    + `${esc(chart.y_label || '')}</text>`,
+    '</svg>',
+  );
+  box.innerHTML += parts.join('');
+  container.appendChild(box);
+  return box;
+}
+
+/** 渲染一个进度步骤。实时聊天和历史回放共用这一份逻辑。 */
+function renderStep(container, ev) {
+  const t = T();
+  const d = document.createElement('div');
+  d.className = 'step';
+
+  if (ev.type === 'status') {
+    d.textContent = ev.key === 'thinking' ? t.statusThinking : t.statusContinuing;
+  } else if (ev.type === 'tool_call') {
+    const sql = ev.arguments?.sql;
+    const args = sql ? '' :
+      ` <code>${esc(JSON.stringify(ev.arguments).slice(0, 120))}</code>`;
+    d.innerHTML = `<b>${esc(ev.name)}</b>${args}`;
+    if (sql) {
+      d.innerHTML += `<details open><summary>${esc(t.viewSql)}</summary>`
+                   + `<pre class="code">${esc(sql)}</pre></details>`;
+    }
+  } else if (ev.type === 'tool_result') {
+    const fn = t.sum[ev.summary_key];
+    d.textContent = '↳ ' + (fn ? fn(ev.summary_args || {}) : ev.summary_key);
+  } else {
+    return null;
+  }
+
+  container.appendChild(d);
+  return d;
+}
+
+async function ask() {
+  const t = T();
+  if (BUSY) return;
+  const question = $('q').value.trim();
+  if (!question) return;
+
+  if (!CONFIG?.api_key_set) {
+    switchTab('settings');
+    flash('llmmsg', t.fillKeyFirst, false);
+    return;
+  }
+
+  BUSY = true;
+  $('send').disabled = true;
+  $('q').value = '';
+  $('examples').classList.add('hidden');
+  addTurn('me', t.you, question);
+
+  const turn = document.createElement('div');
+  turn.className = 'turn';
+  turn.innerHTML = `<div class="who">${esc(t.assistant)}</div>`
+                 + '<div class="steps"></div><div class="bubble spin"></div>';
+  $('chatlog').appendChild(turn);
+  const steps = turn.querySelector('.steps');
+  const bubble = turn.querySelector('.bubble');
+
+  let answer = '';
+  let thinkBox = null;      // 思考过程折叠块，第一段思考到达时才创建
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, conversation_id: CURRENT, language: LANG }),
+    });
+
+    // 手动解析 SSE：EventSource 只支持 GET，我们要用 POST 发问题
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop();          // 最后一段可能不完整，留到下一轮
+
+      for (const chunk of chunks) {
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (ev.type === 'conversation') {
+          CURRENT = ev.id;
+
+        } else if (ev.type === 'status' || ev.type === 'tool_call'
+                   || ev.type === 'tool_result') {
+          const el = renderStep(steps, ev);
+          el?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+
+        } else if (ev.type === 'chart') {
+          // 图直接插在正文气泡之前，紧跟在产生它的工具调用后面
+          renderChart(steps, ev.chart)
+            ?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+
+        } else if (ev.type === 'thinking') {
+          if (!thinkBox) {
+            const d = document.createElement('details');
+            d.className = 'think';
+            d.innerHTML = `<summary>${esc(t.thinkBlock)}</summary><div></div>`;
+            steps.appendChild(d);
+            thinkBox = d.querySelector('div');
+          }
+          thinkBox.textContent += ev.text;
+          thinkBox.scrollTop = thinkBox.scrollHeight;
+
+        } else if (ev.type === 'delta') {
+          bubble.classList.remove('spin');
+          answer += ev.text;
+          setMarkdown(bubble, answer, false);
+
+        } else if (ev.type === 'usage' || ev.type === 'done' || ev.type === 'error') {
+          if (ev.type !== 'usage') {
+            bubble.classList.remove('spin');
+            if (ev.type === 'done') {
+              answer = ev.answer || answer;
+              if (answer) setMarkdown(bubble, answer, true);
+              else bubble.textContent = t.noText;
+            } else {
+              // 错误信息不渲染 Markdown：它是我们自己生成的提示文字，
+              // 里面可能带 SQL 报错原文，按纯文本显示更不容易看错
+              if (bubble._mdTimer) clearTimeout(bubble._mdTimer);
+              bubble.classList.remove('md');
+              bubble.textContent = (answer ? answer + '\n\n' : '') + '⚠️ ' + ev.message;
+            }
+          }
+          const u = ev.usage && t.usage(ev.usage);
+          if (u) {
+            let box = turn.querySelector('.usage');
+            if (!box) {
+              box = document.createElement('div');
+              box.className = 'usage';
+              turn.appendChild(box);
+            }
+            box.textContent = u;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    bubble.classList.remove('spin');
+    if (bubble._mdTimer) clearTimeout(bubble._mdTimer);
+    bubble.classList.remove('md');
+    bubble.textContent = t.disconnected(e.message);
+  }
+
+  BUSY = false;
+  $('send').disabled = false;
+  $('q').focus();
+  loadConvs();      // 刷新侧边栏，让新会话出现在列表里
+}
+
+// ============================================================ 启动
+
+loadConfig()
+  .then(() => { applyLang(); return loadConvs(); })
+  .then(loadStatus)
+  .then(loadIndexInfo);
+setInterval(loadStatus, 20000);
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+# ============================================================ Python / uv
+
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# 注意：uv.lock 和 .python-version 要提交。
+# 这是一个应用而不是库，锁定依赖版本才能保证别的机器上跑出一样的结果。
+
+
+# ============================================================ 密钥与运行时状态
+#
+# 默认这些文件都在 ~/.mda_db_mcp/（项目目录之外），本来不会被 git 看到。
+# 但 MDA_CONFIG_DIR 环境变量可以把它们指到项目内，所以这里挡一道。
+# API Key 一旦提交进 git 历史就很难彻底清除，宁可多挡。
+
+.env
+.env.*
+.mda_db_mcp/
+config.json
+secret.key
+
+# 聊天历史和元数据索引：本地状态，换台机器重建即可，没有提交价值。
+# SQLite 的 -wal / -shm 旁支文件装着同样的内容，一并挡掉。
+history.db
+history.db-*
+metadata_index.db
+metadata_index.db.*
+*.sqlite
+*.sqlite3
+
+
+# ============================================================ 调查微观数据
+#
+# 这个项目处理的是各国调查微观数据。原始文件动辄几百 MB 到几 GB
+# （数据库里记录的来源就是 .7z / .DTA / .zip 这类），而且多数带使用许可，
+# 不该进 git。要放本地副本请放在下面的 data/ 或 raw/ 目录里。
+
+data/
+raw/
+exports/
+
+*.sav
+*.zsav
+*.por
+*.dta
+*.DTA
+*.7z
+*.zip
+*.tar
+*.tar.gz
+*.rds
+*.RData
+*.parquet
+*.dump
+*.sql.gz
+
+# 数据导出：分析产出的表格。要提交某个小的查找表就用 git add -f 单独加。
+*.xlsx
+*.xls
+
+
+# ============================================================ 编辑器与系统
+
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+
+# ============================================================ 日志与临时文件
+
+*.log
+logs/
+tmp/
+*.tmp
+*.bak
+*.orig
